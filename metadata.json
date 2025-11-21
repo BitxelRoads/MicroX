@@ -1,0 +1,8 @@
+{
+  "name": "MicroX - FACS Analysis System",
+  "description": "Real-time Paul Ekman style micro-expression analysis, FACS detection, and emotional incongruence monitoring using Gemini 2.5 Multimodal Live API.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
