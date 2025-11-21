@@ -8,14 +8,22 @@ import { EmotionTimeline, ActionUnitGraph } from './components/Charts';
 // --- Constants & Tool Definition ---
 
 const SYSTEM_INSTRUCTION = `
-You are an advanced FACS (Facial Action Coding System) Expert.
-Your task is to analyze the incoming video and audio stream in real-time.
+You are an expert in FACS (Facial Action Coding System) and Paul Ekman's emotion theory.
+Your job is to accurately label the visible emotion on the user's face based on the video stream.
 
-**PROTOCOL:**
-1. Continuously output 'report_analysis' tool calls.
-2. DO NOT WAIT for user speech. Analyze the visual stream constantly.
-3. If the face is neutral, report it. If there is silence, report it.
-4. Focus on micro-expressions (<0.5s) and incongruence between face and probable tone.
+**STRICT RULES:**
+1. **ACCURACY FIRST:** If the user smiles (AU12 + AU6), output "Happiness". Do not over-analyze it as "confusion" or "nervousness" unless there is clear contradictory evidence.
+2. **NEUTRAL STATE:** If the face is relaxed, simply report "Neutral".
+3. **MICRO-EXPRESSIONS:** Only report fleeting expressions if they are distinct changes from the baseline.
+4. **INCONGRUENCE:** Only report "incongruence: true" if the facial expression clearly mismatches the audio tone (e.g., smiling while shouting angrily).
+5. **PROTOCOL:** Output 'report_analysis' tool calls continuously to update the dashboard.
+
+**FACS CHEATSHEET:**
+- AU12 (Lip Corner Puller) = Happiness
+- AU4 (Brow Lowerer) = Anger/Thinking
+- AU1+AU2+AU4 (Inner/Outer Brow Raise) = Fear/Worry
+- AU1+AU2+AU5 (Upper Lid Raise) = Surprise
+- AU15 (Lip Corner Depressor) = Sadness
 `;
 
 // Define the tool for structured data extraction
@@ -27,7 +35,7 @@ const analysisTool: FunctionDeclaration = {
     properties: {
       dominant_emotion: { 
         type: Type.STRING, 
-        description: "The strongest emotion detected (e.g. Happy, Sad, Anger, Fear, Neutral)." 
+        description: "The strongest emotion detected (e.g. Happiness, Sadness, Anger, Fear, Neutral, Surprise, Disgust)." 
       },
       confidence: { 
         type: Type.NUMBER, 
@@ -52,7 +60,7 @@ const analysisTool: FunctionDeclaration = {
       },
       analysis_summary: { 
         type: Type.STRING, 
-        description: "Short 5-word max observation." 
+        description: "Short 5-word max observation (e.g. 'Genuine smile detected', 'Brows lowered in thought')." 
       }
     },
     required: ["dominant_emotion", "confidence", "active_aus", "baseline_deviation"]
@@ -177,7 +185,7 @@ export default function App() {
               startStreaming(s);
               // CRITICAL: Send an initial text to kickstart the model's analysis loop
               // otherwise it sits waiting for user audio.
-              s.send({ parts: [{ text: "Begin continuous visual analysis." }] });
+              s.send({ parts: [{ text: "Start visual analysis. What do you see on my face right now?" }] });
             });
           },
           onmessage: (msg: LiveServerMessage) => {
@@ -284,7 +292,8 @@ export default function App() {
           canvas.height = 240;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           
-          const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+          // Increased quality to 0.8 to help with clearer expression detection
+          const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
           
           try {
             await session.sendRealtimeInput({ 
@@ -299,7 +308,7 @@ export default function App() {
         }
         processingRef.current = false;
       }
-    }, 500); // 2 FPS for stability
+    }, 330); // ~3 FPS (Speed up slightly to catch faster expressions)
   };
 
   const stopStreaming = () => {
